@@ -68,7 +68,7 @@ const RN_TX_REQUEST_RAW_DATA =
 const SIGNER_PAYLOAD_TEST = {
 	address: KUSAMA_ADDRESS,
 	blockHash:
-		'0xde8f69eeb5e065e18c6950ff708d7e551f68dc9bf59a07c52367c0280f805ec7',
+		'0xde8f69eeb5e065e18c6950ff708d7e551f68dc9bf59a07c52367c0280f000000',
 	blockNumber: '0x231d30',
 	era: createType(registry, 'ExtrinsicEra', { current: 2301232, period: 200 }),
 	genesisHash: SubstrateNetworkKeys.KUSAMA,
@@ -112,7 +112,11 @@ describe('sanity check', () => {
 describe('type registry should get override types', () => {
 	it('get network latest override types', () => {
 		const testRegistry = new TypeRegistry();
-		const westendOverrideTypes = getOverrideTypes(testRegistry, 'westend');
+		const westendOverrideTypes = getOverrideTypes(
+			testRegistry,
+			'westend',
+			Number.MAX_SAFE_INTEGER
+		);
 		expect(westendOverrideTypes).not.toEqual({});
 	});
 });

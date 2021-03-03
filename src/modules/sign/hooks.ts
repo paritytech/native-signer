@@ -7,7 +7,8 @@ import { RegistriesContext } from 'stores/RegistriesContext';
 
 export function usePayloadDetails(
 	rawPayload: Uint8Array | string | null,
-	networkKey: string
+	networkKey: string,
+	specVersion: number
 ): [boolean, GenericExtrinsicPayload | null] {
 	const [payload, setPayload] = useState<GenericExtrinsicPayload | null>(null);
 	const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -17,7 +18,7 @@ export function usePayloadDetails(
 	useEffect(() => {
 		setIsProcessing(true);
 		if (getTypeRegistry === null) return;
-		const typeRegistry = getTypeRegistry(networks, networkKey);
+		const typeRegistry = getTypeRegistry(networks, networkKey, specVersion);
 		if (typeRegistry === null || typeof rawPayload === 'string') {
 			setIsProcessing(false);
 			return;
@@ -37,7 +38,7 @@ export function usePayloadDetails(
 				console.log('error', e);
 			}
 		}
-	}, [rawPayload, networkKey, getTypeRegistry, networks]);
+	}, [rawPayload, networkKey, getTypeRegistry, networks, specVersion]);
 
 	return [isProcessing, payload];
 }
