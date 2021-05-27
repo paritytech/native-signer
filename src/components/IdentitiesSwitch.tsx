@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ function ButtonWithArrow(props: {
 	return <ButtonIcon {...props} {...i_arrowOptions} />;
 }
 
-function IdentitiesSwitch({}: {}): React.ReactElement {
+function IdentitiesSwitch({}: Record<string, never>): React.ReactElement {
 	const accountsStore = useContext(AccountsContext);
 	const navigation: StackNavigationProp<RootStackParamList> = useNavigation();
 	const [visible, setVisible] = useState(false);
@@ -62,7 +62,7 @@ function IdentitiesSwitch({}: {}): React.ReactElement {
 		params?: RootStackParamList[RouteName]
 	): void => {
 		setVisible(false);
-		// @ts-ignore
+		// @ts-ignore: https://github.com/react-navigation/react-navigation/pull/8389/files breaks things
 		navigation.navigate(screenName, params);
 	};
 
@@ -153,6 +153,7 @@ function IdentitiesSwitch({}: {}): React.ReactElement {
 				<ButtonWithArrow
 					title="Network Settings"
 					onPress={(): void => closeModalAndNavigate('NetworkSettings')}
+					testID={testIDs.IdentitiesSwitch.networkSettings}
 				/>
 				<ButtonWithArrow
 					title="Terms and Conditions"

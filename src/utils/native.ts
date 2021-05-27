@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -14,11 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-import SubstrateSign from 'react-native-substrate-sign';
+import { NativeModules } from 'react-native';
 
 import { checksummedAddress } from './checksum';
 
 import { TryBrainWalletAddress } from 'utils/seedRefHooks';
+import { MetadataHandle } from 'types/metadata';
+
+const { SubstrateSign } = NativeModules || {};
 
 interface AddressObject {
 	address: string;
@@ -55,6 +58,37 @@ function toHex(x: string): string {
 		.map(c => c.charCodeAt(0).toString(16))
 		.map(n => (n.length < 2 ? `0${n}` : n))
 		.join('');
+}
+
+//Try to decode fountain packages
+export async function tryDecodeQr(
+	data: Array<string>,
+	size: number,
+	packetSize: number
+): Promise<string> {
+	const preparedData = data.join(',');
+	const localSizeCopy = size;
+	const localPacketSizeCopy = packetSize;
+	const decoded = await SubstrateSign.tryDecodeQrSequence(
+		localSizeCopy,
+		localPacketSizeCopy,
+		preparedData
+	);
+	return decoded;
+}
+
+//Generate metadata handle from metadata
+export async function generateMetadataHandle(
+	metadata: string
+): Promise<MetadataHandle> {
+	const handleJSON = await SubstrateSign.generateMetadataHandle(metadata);
+	const handle = JSON.parse(handleJSON);
+	const metadataHandle: MetadataHandle = {
+		hash: handle[2].toString() as string,
+		specName: handle[0] ? (handle[0] as string) : '',
+		specVersion: handle[1] ? parseInt(handle[1], 10) : 0
+	};
+	return metadataHandle;
 }
 
 export async function brainWalletAddress(seed: string): Promise<AddressObject> {

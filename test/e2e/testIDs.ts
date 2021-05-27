@@ -25,6 +25,7 @@ const testIDs = {
 		deleteIdentity: 'alert_delete_identity'
 	},
 	DetailsTx: {
+		detailsScreen: 'details_screen',
 		signButton: 'sign_button'
 	},
 	Header: {
@@ -34,6 +35,7 @@ const testIDs = {
 		addIdentityButton: 'identities_switch_add_identity',
 		manageIdentityButton: 'identities_switch_manager_button',
 		modal: 'identity_switch_modal',
+		networkSettings: 'identity_switch_network_settings',
 		toggleButton: 'identities_switch_toggle_button'
 	},
 	IdentityBackup: {
@@ -72,8 +74,17 @@ const testIDs = {
 		recoverButton: 'anc_recover_button',
 		showExistedButton: 'anc_show_existed'
 	},
+	MetadataManagement: {
+		deleteMetadataSwitch: 'metadata_management_delete_metadata_switch',
+		scannerButton: 'metadata_management_scanner_button'
+	},
+	NetworkDetails: {
+		manageValidMetadata: 'network_details_manage_valid_metadata',
+		networkDetailsScreen: 'network_details_screen'
+	},
 	NetworkSettings: {
-		networkCard: 'network_settings_network_card'
+		networkCard: 'network_settings_network_card',
+		networkSettingsScreen: 'network_settings_network_settings_screen'
 	},
 	PathDerivation: {
 		deriveButton: 'path_derivation_derive_button',

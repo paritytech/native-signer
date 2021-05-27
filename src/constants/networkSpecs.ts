@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -87,6 +87,11 @@ export const dummySubstrateNetworkParams: SubstrateNetworkParams = {
 	deleted: false,
 	genesisHash: UnknownNetworkKeys.UNKNOWN,
 	logo: require('res/img/logos/Substrate_Dev.png'),
+	metadata: {
+		hash: 'd266fcfdf60c09b2065d6a36751fcde65600df34d372cf0fc1e9d86c1d9edb45',
+		specName: 'kusama',
+		specVersion: 9010
+	},
 	protocol: NetworkProtocols.SUBSTRATE,
 	unit: 'UNIT'
 };
@@ -101,6 +106,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 18,
 		genesisHash: SubstrateNetworkKeys.CENTRIFUGE,
 		logo: require('res/img/logos/Centrifuge.png'),
+		metadata: {
+			hash: '5159df481cf4378ad99f15cac521861bf32458e1b4fad19f03bb3dd8923f899d',
+			specName: 'centrifuge',
+			specVersion: 0
+		},
 		order: 7,
 		pathId: 'centrifuge',
 		prefix: 36,
@@ -112,6 +122,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 18,
 		genesisHash: SubstrateNetworkKeys.CENTRIFUGE_AMBER,
 		logo: require('res/img/logos/Centrifuge.png'),
+		metadata: {
+			hash: '5159df481cf4378ad99f15cac521861bf32458e1b4fad19f03bb3dd8923f899d',
+			specName: 'centrifugeAmber',
+			specVersion: 0
+		},
 		order: 8,
 		pathId: 'centrifuge_amber',
 		prefix: 42,
@@ -123,6 +138,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 18,
 		genesisHash: SubstrateNetworkKeys.EDGEWARE,
 		logo: require('res/img/logos/Edgeware.png'),
+		metadata: {
+			hash: '9f7f918419a8937498e718e30164a69f6ac669bed3779f5a1c02589d7a831c41',
+			specName: 'edgeware',
+			specVersion: 0
+		},
 		order: 6,
 		pathId: 'edgeware',
 		prefix: 7,
@@ -133,6 +153,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		color: '#003366',
 		decimals: 18,
 		genesisHash: SubstrateNetworkKeys.KULUPU,
+		metadata: {
+			hash: '124a81a831e846343e15380846988ce0f744fbcccba90979c501477a2ff58b76',
+			specName: 'kulupu',
+			specVersion: 17
+		},
 		order: 5,
 		pathId: 'kulupu',
 		prefix: 16,
@@ -144,6 +169,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 12,
 		genesisHash: SubstrateNetworkKeys.KUSAMA,
 		logo: require('res/img/logos/Kusama.png'),
+		metadata: {
+			hash: 'd266fcfdf60c09b2065d6a36751fcde65600df34d372cf0fc1e9d86c1d9edb45',
+			specName: 'kusama',
+			specVersion: 9010
+		},
 		order: 2,
 		pathId: 'kusama',
 		prefix: 2,
@@ -154,6 +184,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		color: '#000',
 		decimals: 12,
 		genesisHash: SubstrateNetworkKeys.KUSAMA_DEV,
+		metadata: {
+			hash: 'd266fcfdf60c09b2065d6a36751fcde65600df34d372cf0fc1e9d86c1d9edb45',
+			specName: 'kusama',
+			specVersion: 9010
+		},
 		order: 99,
 		pathId: 'kusama_dev',
 		prefix: 2,
@@ -165,6 +200,11 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 10,
 		genesisHash: SubstrateNetworkKeys.POLKADOT,
 		logo: require('res/img/logos/Polkadot.png'),
+		metadata: {
+			hash: '93b9065e4a6b8327ca1ce90e9ac3d7d967a660dcc5cda408e2595aa3e5c1ab46',
+			specName: 'polkadot',
+			specVersion: 30
+		},
 		order: 1,
 		pathId: 'polkadot',
 		prefix: 0,
@@ -176,27 +216,27 @@ const substrateNetworkBase: Record<string, SubstrateNetworkDefaultConstant> = {
 		decimals: 12,
 		genesisHash: SubstrateNetworkKeys.ROCOCO,
 		logo: require('res/img/logos/Rococo.png'),
+		metadata: {
+			hash: 'a91f58c2a11b8bdc671f63f2cca291b417604d1d96df7cc8adbf30b03ed6b698',
+			specName: 'rococo',
+			specVersion: 9002
+		},
 		order: 4,
 		pathId: 'rococo',
 		prefix: 0,
 		title: 'Rococo',
 		unit: 'ROC'
 	},
-	[SubstrateNetworkKeys.SUBSTRATE_DEV]: {
-		color: '#18FFB2',
-		decimals: 12,
-		genesisHash: SubstrateNetworkKeys.SUBSTRATE_DEV,
-		order: 100,
-		pathId: 'substrate_dev',
-		prefix: 42,
-		title: 'Substrate Development',
-		unit: 'UNIT'
-	},
 	[SubstrateNetworkKeys.WESTEND]: {
 		color: '#660D35',
 		decimals: 12,
 		genesisHash: SubstrateNetworkKeys.WESTEND,
 		logo: require('res/img/logos/Polkadot.png'),
+		metadata: {
+			hash: 'dd71fa0db7b0f678fa819fc01146b5ea25ed3ab91c5ce8477ed7695b1ad66626',
+			specName: 'westend',
+			specVersion: 9030
+		},
 		order: 3,
 		pathId: 'westend',
 		prefix: 42,

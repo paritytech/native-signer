@@ -23,6 +23,10 @@ export type RootStackParamList = {
 	LegacyNetworkChooser: undefined;
 	NetworkDetails: { pathId: string };
 	NetworkSettings: undefined;
+	MetadataManagement: { pathId: string };
+	MetadataSaving: { metadata: string };
+	FullMetadata: { pathId: string };
+	FullMetadataViewer: { pathId: string };
 	PathDerivation: { parentPath: string };
 	PathDetails: { path: string };
 	PathManagement: { path: string };
@@ -51,6 +55,7 @@ export type RootStackParamList = {
 		| {
 				isScanningNetworkSpec: true;
 		  };
+	FastQrScanner: undefined;
 	Security: undefined;
 	DetailsMessage: undefined;
 	SignedMessage: undefined;

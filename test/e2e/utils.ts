@@ -95,7 +95,9 @@ export const testUnlockPin = async (inputPin: string): Promise<void> => {
 export const testSetUpDefaultPath = async (): Promise<void> => {
 	await testInput(IdentityPin.setPin, pinCode);
 	await testInputWithDone(IdentityPin.confirmPin, pinCode);
-	await testVisible(Main.chooserScreen);
+	await waitFor(element(by.id(Main.chooserScreen)))
+		.toBeVisible()
+		.withTimeout(10000);
 	await testScrollAndTap(
 		substrateNetworkButtonIndex,
 		testIDs.Main.chooserScreen
@@ -106,7 +108,7 @@ export const testSetUpDefaultPath = async (): Promise<void> => {
 };
 
 export const waitAlert = (ms?: number): Promise<void> =>
-	new Promise(resolve => setTimeout(resolve, ms || 1000));
+	new Promise(resolve => setTimeout(resolve, ms || 1000000));
 
 export const launchWithScanRequest = async (
 	txRequest: number

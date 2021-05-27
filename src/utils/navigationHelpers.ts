@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -61,6 +61,7 @@ type UnlockWithoutPassword = (
 	nextRoute: Route,
 	identity?: Identity
 ) => Promise<void>;
+
 export const useUnlockSeed = (
 	isSeedRefValid: boolean
 ): {
@@ -220,7 +221,7 @@ export const resetNavigationWithNetworkChooser = <
 >(
 	navigation: GenericNavigationProps<RouteName>,
 	screenName: string,
-	params: object = {},
+	params: Record<string, unknown> = {},
 	isNew = false
 ): void => {
 	const resetAction = CommonActions.reset({
@@ -278,6 +279,12 @@ export const navigateToPathsList = <RouteName extends keyof RootStackParamList>(
 export const navigateToQrScanner = <RouteName extends keyof RootStackParamList>(
 	navigation: GenericNavigationProps<RouteName>
 ): void => resetNavigationWithNetworkChooser(navigation, 'QrScanner');
+
+export const navigateToFastQrScanner = <
+	RouteName extends keyof RootStackParamList
+>(
+	navigation: GenericNavigationProps<RouteName>
+): void => resetNavigationWithNetworkChooser(navigation, 'FastQrScanner');
 
 export const navigateToLegacyAccountList = <
 	RouteName extends keyof RootStackParamList

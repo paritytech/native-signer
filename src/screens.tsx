@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -48,6 +48,9 @@ import IdentityNew from 'screens/IdentityNew';
 import LegacyAccountBackup from 'screens/LegacyAccountBackup';
 import LegacyAccountList from 'screens/LegacyAccountList';
 import LegacyNetworkChooser from 'screens/LegacyNetworkChooser';
+import MetadataManagement from 'modules/network/screens/MetadataManagement';
+import FullMetadata from 'modules/network/screens/FullMetadata';
+import MetadataSaving from 'screens/MetadataSaving';
 import PathDerivation from 'screens/PathDerivation';
 import PathDetails from 'screens/PathDetails';
 import PathManagement from 'screens/PathManagement';
@@ -55,6 +58,7 @@ import PathSecret from 'screens/PathSecret';
 import PathsList from 'screens/PathsList';
 import PrivacyPolicy from 'screens/PrivacyPolicy';
 import QrScanner from 'modules/sign/screens/QrScanner';
+import FastQrScanner from 'screens/FastQrScanner';
 import Security from 'screens/Security';
 import DetailsMessage from 'modules/sign/screens/DetailsMessage';
 import SignedMessage from 'modules/sign/screens/SignedMessage';
@@ -154,6 +158,12 @@ export const AppNavigator = (): React.ReactElement => (
 		<ScreenStack.Screen name="IdentityNew" component={IdentityNew} />
 		<ScreenStack.Screen name="NetworkDetails" component={NetworkDetails} />
 		<ScreenStack.Screen name="NetworkSettings" component={NetworkSettings} />
+		<ScreenStack.Screen
+			name="MetadataManagement"
+			component={MetadataManagement}
+		/>
+		<ScreenStack.Screen name="FullMetadata" component={FullMetadata} />
+		<ScreenStack.Screen name="MetadataSaving" component={MetadataSaving} />
 		<ScreenStack.Screen name="PathDerivation" component={PathDerivation} />
 		<ScreenStack.Screen name="PathDetails" component={PathDetails} />
 		<ScreenStack.Screen name="PathsList" component={PathsList} />
@@ -166,6 +176,7 @@ export const AppNavigator = (): React.ReactElement => (
 			component={PinUnlockWithPassword}
 		/>
 		<ScreenStack.Screen name="QrScanner" component={QrScanner} />
+		<ScreenStack.Screen name="FastQrScanner" component={FastQrScanner} />
 		<ScreenStack.Screen name="Security" component={Security} />
 		<ScreenStack.Screen name="DetailsMessage" component={DetailsMessage} />
 		<ScreenStack.Screen name="SignedMessage" component={SignedMessage} />

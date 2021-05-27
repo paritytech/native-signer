@@ -20,6 +20,7 @@ import {
 	tapBack,
 	testExist,
 	testRecoverIdentity,
+	testScrollAndTap,
 	testTap,
 	testUnlockPin,
 	testVisible
@@ -44,9 +45,9 @@ const {
 
 const testSignedTx = async (): Promise<void> => {
 	await testTap(SecurityHeader.scanButton);
-	await testTap(DetailsTx.signButton);
+	await testScrollAndTap(DetailsTx.signButton, DetailsTx.detailsScreen);
 	await testUnlockPin(pinCode);
-	await testVisible(SignedTx.qrView);
+	await testExist(SignedTx.qrView);
 };
 
 describe('Signing ane exporting test', () => {

@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ export default {
 		main: '#FF4077'
 	},
 	text: {
+		alert: '#D73400',
 		faded: '#9A9A9A',
 		main: '#C0C0C0'
 	}

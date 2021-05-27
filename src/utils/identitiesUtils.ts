@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import { SubstrateNetworkParams } from 'types/networkTypes';
 import { TryCreateFunc } from 'utils/seedRefHooks';
 import {
 	ETHEREUM_NETWORK_LIST,
-	SubstrateNetworkKeys,
 	UnknownNetworkKeys,
 	unknownNetworkPathId
 } from 'constants/networkSpecs';
@@ -39,16 +38,6 @@ import {
 	SerializedIdentity,
 	UnlockedAccount
 } from 'types/identityTypes';
-import {
-	centrifugeAmberMetadata,
-	centrifugeMetadata,
-	edgewareMetadata,
-	kulupuMetadata,
-	kusamaMetadata,
-	polkadotMetaData,
-	rococoMetadata,
-	westendMetadata
-} from 'constants/networkMetadata';
 
 //walk around to fix the regular expression support for positive look behind;
 export const removeSlash = (str: string): string => str.replace(/\//g, '');
@@ -466,28 +455,4 @@ export const groupPaths = (
 		[]
 	);
 	return groupedPaths.sort(_comparePathGroups);
-};
-
-export const getMetadata = (networkKey: string): string | null => {
-	switch (networkKey) {
-		case SubstrateNetworkKeys.CENTRIFUGE:
-			return centrifugeMetadata;
-		case SubstrateNetworkKeys.CENTRIFUGE_AMBER:
-			return centrifugeAmberMetadata;
-		case SubstrateNetworkKeys.KUSAMA:
-		case SubstrateNetworkKeys.KUSAMA_DEV:
-			return kusamaMetadata;
-		case SubstrateNetworkKeys.WESTEND:
-			return westendMetadata;
-		case SubstrateNetworkKeys.EDGEWARE:
-			return edgewareMetadata;
-		case SubstrateNetworkKeys.KULUPU:
-			return kulupuMetadata;
-		case SubstrateNetworkKeys.POLKADOT:
-			return polkadotMetaData;
-		case SubstrateNetworkKeys.ROCOCO:
-			return rococoMetadata;
-		default:
-			return null;
-	}
 };

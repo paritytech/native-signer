@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -21,8 +21,15 @@ import { deserializeIdentities, serializeIdentities } from './identitiesUtils';
 
 import { mergeNetworks, serializeNetworks } from 'utils/networksUtils';
 import { SUBSTRATE_NETWORK_LIST } from 'constants/networkSpecs';
+import { allBuiltInMetadata } from 'constants/networkMetadataList';
 import { SubstrateNetworkParams } from 'types/networkTypes';
 import { Account, Identity } from 'types/identityTypes';
+import { MetadataHandle } from 'types/metadata';
+import {
+	metadataHandleToKey,
+	metadataStorage,
+	getMetadataHandleFromRaw
+} from 'utils/metadataUtils';
 
 function handleError(e: Error, label: string): any[] {
 	console.warn(`loading ${label} error`, e);
@@ -158,6 +165,108 @@ export async function saveNetworks(
 		);
 	} catch (e) {
 		handleError(e, 'networks');
+	}
+}
+
+/*
+ * ========================================
+ *	Metadata Store
+ * ========================================
+ */
+
+export async function getMetadata(
+	metadataHandle: MetadataHandle | null
+): Promise<string> {
+	try {
+		if (!metadataHandle) return '';
+		const metadataKey = metadataHandleToKey(metadataHandle);
+		console.log(metadataKey);
+		const metadataRecord = await AsyncStorage.getItem(metadataKey);
+		return metadataRecord ? metadataRecord : '';
+	} catch (e) {
+		handleError(e, 'load metadata');
+		return '';
+	}
+}
+
+function isMetadataKey(this: string): boolean {
+	//check if the line begins with 'signer_metadata_' - not ideomatic but safe
+	return this.substr(0, metadataStorage.length) === metadataStorage;
+}
+
+export async function dumpMetadataDB(): Promise<
+	Array<[string, string | null]>
+> {
+	try {
+		const allKeys = await AsyncStorage.getAllKeys();
+		const metadataKeys = allKeys.filter(isMetadataKey);
+		const allMetadataMap = await AsyncStorage.multiGet(metadataKeys);
+		return allMetadataMap;
+	} catch (e) {
+		handleError(e, 'metadata db fetch failed');
+		return [];
+	}
+}
+
+export async function getAllMetadata(): Promise<Array<MetadataHandle>> {
+	try {
+		const allMetadataMap = await dumpMetadataDB();
+		const handles: Array<MetadataHandle> = [];
+
+		// Uncomment this to clean up
+		/*
+		for (let deleteme of metadataKeys) {
+			await SecureStorage.deleteItem(deleteme, metadataStorage);
+		}
+		*/
+		for (const metadataValue of allMetadataMap) {
+			handles.push(await getMetadataHandleFromRaw(metadataValue[1]));
+		}
+		return handles;
+	} catch (e) {
+		handleError(e, 'getAllMetadata');
+		return [];
+	}
+}
+
+function isRelevant(this: string, element: MetadataHandle): boolean {
+	return String(element.specName) === this;
+}
+
+export async function getRelevantMetadata(
+	specName: string
+): Promise<Array<MetadataHandle>> {
+	const handles = await getAllMetadata();
+	return handles.filter(isRelevant, specName);
+}
+
+export async function saveMetadata(newMetadata: string): Promise<void> {
+	try {
+		const metadataHandle = await getMetadataHandleFromRaw(newMetadata);
+		const newMetadataKey = metadataHandleToKey(metadataHandle);
+		await AsyncStorage.setItem(newMetadataKey, newMetadata);
+		console.log('Saved: ' + newMetadataKey);
+	} catch (e) {
+		handleError(e, 'save metadata');
+	}
+}
+
+export async function populateMetadata(): Promise<void> {
+	console.log('loading built-in metadata...');
+	for (const metadataString of allBuiltInMetadata) {
+		await saveMetadata(metadataString);
+	}
+}
+
+export async function deleteMetadata(
+	metadataHandle: MetadataHandle
+): Promise<void> {
+	try {
+		await AsyncStorage.removeItem(metadataHandleToKey(metadataHandle));
+		console.log('metadata successfully removed: ');
+		console.log(metadataHandle);
+	} catch (e) {
+		handleError(e, 'metadata deletion');
 	}
 }
 

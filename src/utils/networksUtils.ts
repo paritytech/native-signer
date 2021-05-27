@@ -60,6 +60,7 @@ export const generateNetworkParamsFromParsedData = (
 		...networkParsedData.data,
 		deleted: false,
 		logo: require('res/img/logos/Substrate_Dev.png'),
+		metadata: null,
 		order: 0,
 		pathId: pathId.replace(/ /g, '_'),
 		protocol: 'substrate',

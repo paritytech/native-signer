@@ -3,7 +3,6 @@ import { GenericExtrinsicPayload } from '@polkadot/types';
 
 import { ExtrinsicPayloadLatestVersion } from 'constants/chainData';
 import { NetworksContext } from 'stores/NetworkContext';
-import { RegistriesContext } from 'stores/RegistriesContext';
 
 export function usePayloadDetails(
 	rawPayload: Uint8Array | string | null,
@@ -11,14 +10,19 @@ export function usePayloadDetails(
 ): [boolean, GenericExtrinsicPayload | null] {
 	const [payload, setPayload] = useState<GenericExtrinsicPayload | null>(null);
 	const [isProcessing, setIsProcessing] = useState<boolean>(false);
-	const { networks } = useContext(NetworksContext);
-	const { getTypeRegistry } = useContext(RegistriesContext);
+	const { networks, getTypeRegistry } = useContext(NetworksContext);
 
 	useEffect(() => {
 		setIsProcessing(true);
-		if (getTypeRegistry === null) return;
-		const typeRegistry = getTypeRegistry(networks, networkKey);
-		if (typeRegistry === null || typeof rawPayload === 'string') {
+		// was this line useful for anything?
+		//if (getTypeRegistry === null) return;
+		const typeRegistry = getTypeRegistry(networkKey);
+		if (
+			typeRegistry === null ||
+			typeof rawPayload === 'string' ||
+			!networks.get(networkKey) ||
+			!networks.get(networkKey)!.metadata //2nd ! should not be needed
+		) {
 			setIsProcessing(false);
 			return;
 		} else {
@@ -34,7 +38,7 @@ export function usePayloadDetails(
 				setIsProcessing(false);
 			} catch (e) {
 				//can't generate extrinsic payload, don't display.
-				console.log('error', e);
+				console.log('Payload details error', e);
 			}
 		}
 	}, [rawPayload, networkKey, getTypeRegistry, networks]);

@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -116,7 +116,7 @@ function UnsignedTxView({
 	};
 
 	return (
-		<SafeAreaScrollViewContainer>
+		<SafeAreaScrollViewContainer testID={testIDs.DetailsTx.detailsScreen}>
 			<Text style={styles.topTitle}>Signed extrinsic</Text>
 			<CompatibleCard
 				account={sender}

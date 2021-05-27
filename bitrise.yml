@@ -7,15 +7,14 @@ trigger_map:
   workflow: build
 workflows:
   build:
-  # Produces a debug release, good for AVD or manual testing.
     steps:
     - activate-ssh-key@4:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - cache-pull@2: {}
-    - git-clone@4: {}
+    - git-clone@5.1: {}
     - nvm@1:
         inputs:
-        - node_version: '13'
+        - node_version: '15'
     - npm@1:
         inputs:
         - cache_local_deps: 'true'
@@ -32,11 +31,11 @@ workflows:
         inputs:
         - is_debug: 'yes'
         - content: >
-            #!/usr/bin/env bash
-            set -ex
-            TMPDIR=${BITRISE_SOURCE_DIR}/metro-cache
-            NODE_OPTIONS=--max_old_space_size=7000
-            time npx react-native bundle --dev false --platform android --entry-file index.js --bundle-output ./android/app/src/main/assets/index.android.bundle --assets-dest ./android/app/src/main/res
+            #!/usr/bin/env bash set -ex TMPDIR=${BITRISE_SOURCE_DIR}/metro-cache
+            NODE_OPTIONS=--max_old_space_size=7000 time npx react-native bundle
+            --dev false --platform android --entry-file index.js --bundle-output
+            ./android/app/src/main/assets/index.android.bundle --assets-dest
+            ./android/app/src/main/res
     - gradle-runner@1:
         inputs:
         - gradlew_path: $BITRISE_SOURCE_DIR/android/gradlew
@@ -70,6 +69,10 @@ workflows:
             -archivePath ./build/Products/ParitySigner.xcarchive \
             -workspace NativeSigner.xcworkspace \
             -sdk iphonesimulator
+    - yarn@0:
+        inputs:
+        - args: 'test-e2e:ios'
+        - command: run
     - cache-push@2:
         inputs:
         - compress_archive: 'true'
@@ -78,11 +81,10 @@ workflows:
             $BITRISE_SOURCE_DIR/ios/build
             $BITRISE_SOURCE_DIR/node_modules
         - is_debug_mode: 'true'
-    - deploy-to-bitrise-io@1.6.1:
+    - deploy-to-bitrise-io@1.13:
         inputs:
         - is_compress: 'true'
-        - deploy_path: >-
-            $BITRISE_SOURCE_DIR/ios/build/Products/ParitySigner.xcarchive
+        - deploy_path: $BITRISE_SOURCE_DIR/ios/build/Products/ParitySigner.xcarchive
 app:
   envs:
   - opts:

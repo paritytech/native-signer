@@ -1,4 +1,4 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// Copyright 2015-2021 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -14,25 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-import { GenericExtrinsicPayload } from '@polkadot/types';
-import type { Call, ExtrinsicEra } from '@polkadot/types/interfaces';
-import { AnyJson, AnyU8a, IExtrinsicEra, IMethod } from '@polkadot/types/types';
+import { GenericExtrinsicPayload, GenericCall, Struct } from '@polkadot/types';
+import type { ExtrinsicEra } from '@polkadot/types/interfaces';
+import {
+	AnyJson,
+	AnyU8a,
+	Codec,
+	IExtrinsicEra,
+	IMethod
+} from '@polkadot/types/types';
 import { formatBalance } from '@polkadot/util';
 import { decodeAddress, encodeAddress } from '@polkadot/util-crypto';
 import React, { useContext, useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { AlertStateContext } from 'stores/alertContext';
-import { NetworksContext } from 'stores/NetworkContext';
-import {
-	RegistriesContext,
-	RegistriesStoreState
-} from 'stores/RegistriesContext';
+import { NetworksContext, NetworksContextState } from 'stores/NetworkContext';
 import colors from 'styles/colors';
 import fontStyles from 'styles/fontStyles';
-import { alertDecodeError } from 'utils/alertUtils';
 import { withRegistriesStore } from 'utils/HOC';
-import { shortString } from 'utils/strings';
+import { MethodCard } from 'components/MethodCard';
+import { SanitizedArgs, SanitizedCall } from 'types/payloads';
 
 const recodeAddress = (encodedAddress: string, prefix: number): string =>
 	encodeAddress(decodeAddress(encodedAddress), prefix);
@@ -41,7 +43,7 @@ type ExtrinsicPartProps = {
 	fallback?: string;
 	label: string;
 	networkKey: string;
-	registriesStore: RegistriesStoreState;
+	registriesStore: NetworksContextState;
 	value: AnyJson | AnyU8a | IMethod | IExtrinsicEra;
 };
 
@@ -55,75 +57,93 @@ const ExtrinsicPart = withRegistriesStore<ExtrinsicPartProps>(
 	}: ExtrinsicPartProps): React.ReactElement => {
 		const [period, setPeriod] = useState<string>();
 		const [phase, setPhase] = useState<string>();
-		const [formattedCallArgs, setFormattedCallArgs] = useState<any>();
+		//const [formattedCallArgs, setFormattedCallArgs] = useState<any>();
 		const [tip, setTip] = useState<string>();
 		const [useFallback, setUseFallBack] = useState(false);
-		const { getTypeRegistry } = useContext(RegistriesContext);
 		const { setAlert } = useContext(AlertStateContext);
-		const { networks, getSubstrateNetwork } = useContext(NetworksContext);
+		const { networks, getSubstrateNetwork, getTypeRegistry } = useContext(
+			NetworksContext
+		);
 		const networkParams = getSubstrateNetwork(networkKey);
 		const prefix = networkParams.prefix;
-		const typeRegistry = getTypeRegistry(networks, networkKey)!;
+		const typeRegistry = getTypeRegistry(networkKey)!;
 
-		useEffect(() => {
-			if (label === 'Method' && !fallback) {
-				try {
-					const call = typeRegistry.createType('Call', value);
-					const methodArgs = {};
+		//These operations should be re-implemented in Rust once metadata V13 is out
+		//TODO: please audit these two functions again and again to make sure they do not lie
+		function parseArrayGenericCalls(
+			argsArray: Codec[],
+			depthLimiter: number
+		): (Codec | SanitizedCall)[] {
+			return argsArray.map(argument => {
+				if (argument instanceof GenericCall) {
+					return parseGenericCall(argument, depthLimiter + 1);
+				}
 
-					function formatArgs(
-						callInstance: Call,
-						callMethodArgs: any,
-						depth: number
-					): void {
-						const { args, meta } = callInstance;
-						const paramArgKvArray = [];
-						if (!meta.args.length) {
-							const sectionMethod = `${call.method}.${call.section}`;
-							callMethodArgs[sectionMethod] = null;
-							return;
+				return argument;
+			});
+		}
+
+		function parseGenericCall(
+			genericCall: GenericCall,
+			depthLimiter: number
+		): SanitizedCall {
+			//Recursion depth limitation close but safely within framework's limits.
+			const newArgs: SanitizedArgs = {};
+			if (depthLimiter > 50) {
+				return {
+					args: newArgs,
+					method: 'depth overflow (over 50 nested layers)'
+				};
+			}
+
+			// Pull out the struct of arguments to this call
+			const callArgs = genericCall.get('args') as Struct;
+
+			// Make sure callArgs exists and we can access its keys
+			if (callArgs && callArgs.defKeys) {
+				// paramName is a string
+				for (const paramName of callArgs.defKeys) {
+					const argument = callArgs.get(paramName);
+
+					if (Array.isArray(argument)) {
+						newArgs[paramName] = parseArrayGenericCalls(
+							argument,
+							depthLimiter + 1
+						);
+					} else if (argument instanceof GenericCall) {
+						newArgs[paramName] = parseGenericCall(argument, depthLimiter + 1);
+					} else if (
+						paramName === 'call' &&
+						argument?.toRawType() === 'Bytes'
+					) {
+						// multiSig.asMulti.args.call is an OpaqueCall (Vec<u8>) that we
+						// serialize to a polkadot-js Call and parse so it is not a hex blob.
+						try {
+							const call = typeRegistry.createType('Call', argument.toHex());
+							newArgs[paramName] = parseGenericCall(call, depthLimiter + 1);
+						} catch {
+							//don't guess - admit failure
+							return {
+								args: newArgs,
+								method: 'Could not parse call!'
+							};
 						}
-
-						for (let i = 0; i < meta.args.length; i++) {
-							let argument;
-							if (
-								args[i].toRawType() === 'Balance' ||
-								args[i].toRawType() === 'Compact<Balance>'
-							) {
-								argument = formatBalance(args[i].toString());
-							} else if (
-								args[i].toRawType() === 'Address' ||
-								args[i].toRawType() === 'AccountId'
-							) {
-								// encode Address and AccountId to the appropriate prefix
-								argument = recodeAddress(args[i].toString(), prefix);
-							} else if ((args[i] as Call).section) {
-								argument = formatArgs(args[i] as Call, callMethodArgs, depth++); // go deeper into the nested calls
-							} else if (
-								args[i].toRawType() === 'Vec<AccountId>' ||
-								args[i].toRawType() === 'Vec<Address>'
-							) {
-								argument = (args[i] as any).map((v: any) =>
-									recodeAddress(v.toString(), prefix)
-								);
-							} else {
-								argument = args[i].toString();
-							}
-							const param = meta.args[i].name.toString();
-							const sectionMethod = `${call.method}.${call.section}`;
-							paramArgKvArray.push([param, argument]);
-							callMethodArgs[sectionMethod] = paramArgKvArray;
-						}
+					} else {
+						newArgs[paramName] = (argument as any) as SanitizedCall;
 					}
-
-					formatArgs(call, methodArgs, 0);
-					setFormattedCallArgs(methodArgs);
-				} catch (e) {
-					alertDecodeError(setAlert);
-					setUseFallBack(true);
 				}
 			}
 
+			return {
+				args: newArgs,
+				method: {
+					method: genericCall.method,
+					pallet: genericCall.section
+				}
+			};
+		}
+
+		useEffect(() => {
 			if (label === 'Era' && !fallback) {
 				if ((value as ExtrinsicEra).isMortalEra) {
 					setPeriod((value as ExtrinsicEra).asMortalEra.period.toString());
@@ -178,58 +198,10 @@ const ExtrinsicPart = withRegistriesStore<ExtrinsicPartProps>(
 			}
 		};
 
-		type ArgsList = Array<[string, any]>;
-		type MethodCall = [string, ArgsList];
-		type FormattedArgs = Array<MethodCall>;
-
 		const renderMethodDetails = (): React.ReactNode => {
-			if (formattedCallArgs) {
-				const formattedArgs: FormattedArgs = Object.entries(formattedCallArgs);
-
-				// HACK: if there's a sudo method just put it to the front. Better way would be to order by depth but currently this is only relevant for a single extrinsic, so seems like overkill.
-				for (let i = 1; i < formattedArgs.length; i++) {
-					if (formattedArgs[i][0].includes('sudo')) {
-						const tmp = formattedArgs[i];
-						formattedArgs.splice(i, 1);
-						formattedArgs.unshift(tmp);
-						break;
-					}
-				}
-
-				return formattedArgs.map((entry, index) => {
-					const sectionMethod = entry[0];
-					const paramArgs: Array<[any, any]> = entry[1];
-
-					return (
-						<View key={index} style={styles.callDetails}>
-							<Text style={styles.secondaryText}>
-								Call <Text style={styles.titleText}>{sectionMethod}</Text> with
-								the following arguments:
-							</Text>
-							{paramArgs ? (
-								paramArgs.map(([param, arg]) => (
-									<View key={param} style={styles.callDetails}>
-										<Text style={styles.titleText}>
-											{' { '}
-											{param}:{' '}
-											{arg && arg.length > 50
-												? shortString(arg)
-												: arg instanceof Array
-												? arg.join(', ')
-												: arg}{' '}
-											{'}'}
-										</Text>
-									</View>
-								))
-							) : (
-								<Text style={styles.secondaryText}>
-									This method takes 0 arguments.
-								</Text>
-							)}
-						</View>
-					);
-				});
-			}
+			const call = typeRegistry.createType('Call', value);
+			const parsedJSON = parseGenericCall(call, 0);
+			return <MethodCard renderCall={parsedJSON} depth={0} />;
 		};
 
 		const renderTipDetails = (): React.ReactElement => {

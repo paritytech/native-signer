@@ -1,3 +1,4 @@
+import { MetadataHandle } from 'types/metadata';
 import { NetworkProtocols, unknownNetworkPathId } from 'constants/networkSpecs';
 
 export type NetworkProtocol = 'ethereum' | 'substrate' | 'unknown';
@@ -13,6 +14,7 @@ export type SubstrateNetworkDefaultConstant = {
 	deleted?: boolean;
 	genesisHash: string;
 	logo?: number;
+	metadata: MetadataHandle | null;
 	order: number;
 	pathId: string;
 	protocol?: NetworkProtocol;
@@ -27,6 +29,7 @@ export type SubstrateNetworkBasics = {
 	decimals: number;
 	deleted?: boolean;
 	genesisHash: string;
+	metadata: MetadataHandle | null;
 	order?: number;
 	pathId: string;
 	protocol?: NetworkProtocol;
@@ -42,6 +45,7 @@ export type SubstrateNetworkParams = {
 	deleted: boolean;
 	genesisHash: string;
 	logo: number;
+	metadata: MetadataHandle | null;
 	order: number;
 	pathId: string;
 	protocol: NetworkProtocol;
