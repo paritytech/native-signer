@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-import React, { ReactElement, ReactNode, useContext } from 'react';
+import React, { ReactElement, ReactNode } from 'react';
 import { View, StyleSheet, Text, ViewStyle, TextStyle } from 'react-native';
 import AntIcon from 'react-native-vector-icons/AntDesign';
 import { Icon } from 'react-native-elements';
 
 import ButtonIcon from './ButtonIcon';
-import AccountIcon from './AccountIcon';
 
-import { NetworksContext } from 'stores/NetworkContext';
+import NetworkIcon from 'components/NetworkIcon';
 import TouchableItem from 'components/TouchableItem';
 import testIDs from 'e2e/testIDs';
 import fontStyles from 'styles/fontStyles';
@@ -115,7 +114,6 @@ export function LeftScreenHeading({
 		...baseStyles.text,
 		...baseStyles.t_left
 	};
-	const { getNetwork } = useContext(NetworksContext);
 	const isDisabled = onPress === undefined;
 	return (
 		<TouchableItem
@@ -124,9 +122,8 @@ export function LeftScreenHeading({
 			disabled={isDisabled}
 		>
 			<View style={{ alignItems: 'center', flexDirection: 'row' }}>
-				<AccountIcon
-					address={''}
-					network={getNetwork(networkKey)}
+				<NetworkIcon
+					logo={'network goes here'}
 					style={baseStyles.networkIcon}
 				/>
 				<View>

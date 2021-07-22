@@ -1,5 +1,49 @@
 package io.parity.signer;
 
+//import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+//import java.security.KeyPair;
+
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.io.IOException;
+import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.util.concurrent.Executor;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.spec.IvParameterSpec;
+
+import android.os.Looper;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.AssetManager;
+import android.provider.Settings;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+//import androidx.security.crypto.MasterKey;
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.fragment.app.FragmentActivity;
+
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.biometric.BiometricPrompt.PromptInfo;
+
+import com.facebook.react.bridge.AssertionException;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -7,16 +51,42 @@ import com.facebook.react.bridge.Promise;
 
 public class SubstrateSignModule extends ReactContextBaseJavaModule {
 
-    private final ReactApplicationContext reactContext;
+	private final ReactApplicationContext reactContext;
+	private final SharedPreferences sharedPreferences;
+	private final BiometricPrompt.PromptInfo promptInfo;
+	private final String dbname;
+	private final BiometricManager biometricManager;
+	private Executor executor;
+	private BiometricPrompt biometricPrompt;
+	private final String KEY_NAME = "SubstrateSignerMasterKey";
+	private Object AuthLockAbomination = new Object();
+	private final String separator = "-";
 
     static {
         System.loadLibrary("signer");
     }
 
-    public SubstrateSignModule(ReactApplicationContext reactContext) {
-        super(reactContext);
-        this.reactContext = reactContext;
-    }
+	public SubstrateSignModule(ReactApplicationContext reactContext) {
+		super(reactContext);
+		this.reactContext = reactContext;
+		sharedPreferences = reactContext.getSharedPreferences("SubstrateSignKeychain", Context.MODE_PRIVATE);
+		dbname = reactContext.getFilesDir().toString();
+
+		promptInfo = new BiometricPrompt.PromptInfo.Builder()
+        		.setTitle("Secret seed protection")
+	        	.setSubtitle("Please log in")
+	        	.setAllowedAuthenticators(BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+		        .build();
+		biometricManager = BiometricManager.from(reactContext);
+		/*if (biometricManager.canAuthenticate(BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED) {
+			// Prompts the user to create credentials that your app accepts.
+			final Intent enrollIntent = new Intent(Settings.ACTION_BIOMETRIC_ENROLL);
+			enrollIntent.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
+				BiometricManager.Authenticators.DEVICE_CREDENTIAL);
+			startActivity(enrollIntent);
+		}*/
+		
+	}
 
     private void rejectWithException(Promise promise, String code, Exception e) {
         String[] sp = e.getMessage().split(": ");
@@ -29,253 +99,472 @@ public class SubstrateSignModule extends ReactContextBaseJavaModule {
         return "SubstrateSign";
     }
 
-    @ReactMethod
-    public void brainWalletAddress(String seed, Promise promise) {
-        promise.resolve(ethkeyBrainwalletAddress(seed));
-    }
+	private void generateSecretKey(KeyGenParameterSpec keyGenParameterSpec) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
+		KeyGenerator keyGenerator = KeyGenerator.getInstance(
+			KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+		keyGenerator.init(keyGenParameterSpec);
+		keyGenerator.generateKey();
+	}
 
-    @ReactMethod
-    public void brainWalletBIP39Address(String seed, Promise promise) {
-        try {
-            promise.resolve(ethkeyBrainwalletBIP39Address(seed));
-        } catch (Exception e) {
-            rejectWithException(promise, "brainwallet bip39 address", e);
-        }
-    }
+	private SecretKey getSecretKey() throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, UnrecoverableKeyException {
+		KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
 
-    @ReactMethod
-    public void brainWalletSign(String seed, String message, Promise promise) {
-        try {
-            promise.resolve(ethkeyBrainwalletSign(seed, message));
-        } catch (Exception e) {
-            rejectWithException(promise, "brainwallet sign", e);
-        }
-    }
+		// Before the keystore can be accessed, it must be loaded.
+		keyStore.load(null);
+		return ((SecretKey)keyStore.getKey(KEY_NAME, null));
+	}
 
-    @ReactMethod
-    public void rlpItem(String rlp, int position, Promise promise) {
-        try {
-            promise.resolve(ethkeyRlpItem(rlp, position));
-        } catch (Exception e) {
-            rejectWithException(promise, "rlp item", e);
-        }
-    }
+	private Cipher getCipher() throws NoSuchAlgorithmException, NoSuchPaddingException {
+		return Cipher.getInstance(KeyProperties.KEY_ALGORITHM_AES + "/"
+			+ KeyProperties.BLOCK_MODE_CBC + "/"
+			+ KeyProperties.ENCRYPTION_PADDING_PKCS7);
+	}
 
-    @ReactMethod
-    public void keccak(String data, Promise promise) {
-        try {
-            promise.resolve(ethkeyKeccak(data));
-        } catch (Exception e) {
-            rejectWithException(promise, "keccak", e);
-        }
-    }
+	private String decryptSeed(String encryptedSeedRecord) throws NoSuchAlgorithmException, NoSuchPaddingException, KeyStoreException, CertificateException, IOException, UnrecoverableKeyException, InvalidAlgorithmParameterException, BadPaddingException, InvalidKeyException, IllegalBlockSizeException {
+		String[] encryptedParts = encryptedSeedRecord.split(separator);
+		try {
+			Cipher cipher = getCipher();
+			SecretKey secretKey = getSecretKey();
+			cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(Base64.decode(encryptedParts[1], Base64.DEFAULT)));		
+			String seedPhrase = new String(cipher.doFinal(Base64.decode(encryptedParts[0], Base64.DEFAULT)));
+			return seedPhrase;
+		} catch (Exception ignored) {
+			startAuthentication();
+			Cipher cipher = getCipher();
+			SecretKey secretKey = getSecretKey();
+			cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(Base64.decode(encryptedParts[1], Base64.DEFAULT)));		
+			String seedPhrase = new String(cipher.doFinal(Base64.decode(encryptedParts[0], Base64.DEFAULT)));
+			return seedPhrase;
+		}
+	}
 
-    @ReactMethod
-    public void blake2b(String data, Promise promise) {
-        try {
-            promise.resolve(ethkeyBlake(data));
-        } catch (Exception e) {
-            rejectWithException(promise, "blake2b", e);
-        }
-    }
+/*	protected BiometricPrompt authenticateWithPrompt(@NonNull final FragmentActivity activity) {
+		final BiometricPrompt prompt = new BiometricPrompt(activity, executor, this);
+		prompt.authenticate(this.promptInfo);
 
-    @ReactMethod
-    public void ethSign(String data, Promise promise) {
-        promise.resolve(ethkeyEthSign(data));
-    }
+		return prompt;
+	}
+*/
+	/** Block current NON-main thread and wait for user authentication results. */
+	public void waitResult() {
+		if (Thread.currentThread() == Looper.getMainLooper().getThread())
+			throw new AssertionException("method should not be executed from MAIN thread");
 
-    @ReactMethod
-    public void blockiesIcon(String seed, Promise promise) {
-        promise.resolve(ethkeyBlockiesIcon(seed));
-    }
+		try {
+			synchronized (AuthLockAbomination) {
+				AuthLockAbomination.wait();
+			}
+		} catch (InterruptedException ignored) {
+			/* shutdown sequence */
+		}
+	}
 
-    @ReactMethod
-    public void randomPhrase(int wordsNumber, Promise promise) {
-        promise.resolve(ethkeyRandomPhrase(wordsNumber));
-    }
+	/** trigger interactive authentication. */
+	public void startAuthentication() {
+		FragmentActivity activity = (FragmentActivity) getCurrentActivity();
+		
+		// code can be executed only from MAIN thread
+		if (Thread.currentThread() != Looper.getMainLooper().getThread()) {
+			activity.runOnUiThread(this::startAuthentication);
+			waitResult();
+			return;
+		}
 
-    @ReactMethod
-    public void encryptData(String data, String password, Promise promise) {
-        promise.resolve(ethkeyEncryptData(data, password));
-    }
+		executor = reactContext.getMainExecutor();
+		biometricPrompt = new BiometricPrompt(
+			activity,
+			executor, 
+			new BiometricPrompt.AuthenticationCallback(){
+				@Override
+				public void onAuthenticationError(int errorCode,
+					CharSequence errString) {
+					super.onAuthenticationError(errorCode, errString);
+					synchronized (AuthLockAbomination) {
+						AuthLockAbomination.notify();
+					}
 
-    @ReactMethod
-    public void decryptData(String data, String password, Promise promise) {
-        try {
-            promise.resolve(ethkeyDecryptData(data, password));
-        } catch (Exception e) {
-            rejectWithException(promise, "decrypt data", e);
-        }
-    }
+				}
 
-    @ReactMethod
-    public void qrCode(String data, Promise promise) {
-        try {
-            promise.resolve(ethkeyQrCode(data));
-        } catch (Exception e) {
-            rejectWithException(promise, "qr code", e);
-        }
-    }
+				@Override
+				public void onAuthenticationSucceeded(
+					BiometricPrompt.AuthenticationResult result) {
+					super.onAuthenticationSucceeded(result);
+					synchronized (AuthLockAbomination) {
+						AuthLockAbomination.notify();
+					}
+				}
 
-    @ReactMethod
-    public void qrCodeHex(String data, Promise promise) {
-        try {
-            promise.resolve(ethkeyQrCodeHex(data));
-        } catch (Exception e) {
-            rejectWithException(promise, "qr code hex", e);
-        }
-    }
+				@Override
+				public void onAuthenticationFailed() {
+					super.onAuthenticationFailed();
+					synchronized (AuthLockAbomination) {
+						AuthLockAbomination.notify();
+					}
+				}
+			});
+		
+		biometricPrompt.authenticate(promptInfo);
+	}
 
-    @ReactMethod
-    public void substrateAddress(String seed, int prefix, Promise promise) {
-        try {
-            promise.resolve(substrateBrainwalletAddress(seed, prefix));
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate address", e);
-        }
-    }
+	/**
+	 * Copy the database asset at the specified path to this app's data directory. If the
+	 * asset is a directory, its contents are also copied.
+	 *	
+	 * @param path
+	 * Path to asset, relative to app's assets/database directory.
+	 */
+	private void copyAsset(String path) throws IOException {
+		AssetManager manager = reactContext.getAssets();
 
-    @ReactMethod
-    public void substrateSign(String seed, String message, Promise promise) {
-        try {
-            promise.resolve(substrateBrainwalletSign(seed, message));
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate sign", e);
-        }
-    }
+		// If we have a directory, we make it and recurse. If a file, we copy its
+		// contents.
+		try {
+			String[] contents = manager.list("database" + path);
 
-    @ReactMethod
-    public void schnorrkelVerify(String seed, String message, String signature, Promise promise) {
-        try {
-            promise.resolve(schnorrkelVerify(seed, message, signature));
-        } catch (Exception e) {
-            rejectWithException(promise, "schnorrkel verify", e);
-        }
-    }
+			// The documentation suggests that list throws an IOException, but doesn't
+			// say under what conditions. It'd be nice if it did so when the path was
+			// to a file. That doesn't appear to be the case. If the returned array is
+			// null or has 0 length, we assume the path is to a file. This means empty
+			// directories will get turned into files.
+			if (contents == null || contents.length == 0)
+				throw new IOException();
 
-    @ReactMethod
-    public void decryptDataRef(String data, String password, Promise promise) {
-        try {
-            // `long` is incompatible with the bridge so pass as a double
-            double d = Double.longBitsToDouble(ethkeyDecryptDataRef(data, password));
-            if (Double.isNaN(d)) {
-                promise.reject("reference is nan", "reference is nan");
-            } else {
-                promise.resolve(d);
-            }
-        } catch (Exception e) {
-            rejectWithException(promise, "decrypt data ref", e);
-        }
-    }
+			// Make the directory.
+			File dir = new File(dbname, path);
+			dir.mkdirs();
 
-    @ReactMethod
-    public void destroyDataRef(double data_ref, Promise promise) {
-        try {
-            ethkeyDestroyDataRef(Double.doubleToRawLongBits(data_ref));
-            promise.resolve(0);
-        } catch (Exception e) {
-            rejectWithException(promise, "destroy data ref", e);
-        }
-    }
+			// Recurse on the contents.
+			for (String entry : contents) {
+				copyAsset(path + "/" + entry);
+			}
+		} catch (IOException e) {
+			copyFileAsset(path);
+		}
+	}
 
-    @ReactMethod
-    public void brainWalletSignWithRef(double seed_ref, String message, Promise promise) {
-        try {
-            promise.resolve(ethkeyBrainwalletSignWithRef(Double.doubleToRawLongBits(seed_ref), message));
-        } catch (Exception e) {
-            rejectWithException(promise, "brainwallet sign with ref", e);
-        }
-    }
+	/**
+	 * Copy the database asset file specified by path to app's data directory. Assumes
+	 * parent directories have already been created.
+	 *
+	 * @param path
+	 * Path to asset, relative to app's assets/database directory.
+	 */
+	private void copyFileAsset(String path) throws IOException {
+		AssetManager manager = reactContext.getAssets();
+		File file = new File(dbname, path);
+		InputStream in = manager.open("database" + path);
+		OutputStream out = new FileOutputStream(file);
+		byte[] buffer = new byte[1024];
+		int read = in.read(buffer);
+		while (read != -1) {
+			out.write(buffer, 0, read);
+			read = in.read(buffer);
+		}
+		out.close();
+		in.close();
+	}
 
-    @ReactMethod
-    public void substrateSignWithRef(double seed_ref, String suriSuffix, String message, Promise promise) {
-        try {
-            String s = ethkeySubstrateBrainwalletSignWithRef(Double.doubleToRawLongBits(seed_ref), suriSuffix, message);
-            promise.resolve(s);
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate sign with ref", e);
-        }
-    }
 
-    @ReactMethod
-    public void brainWalletAddressWithRef(double seedRef, Promise promise) {
-        try {
-            String s = ethkeyBrainWalletAddressWithRef(Double.doubleToRawLongBits(seedRef));
-            promise.resolve(s);
-        } catch (Exception e) {
-            rejectWithException(promise, "brainwallet address with ref", e);
-        }
-    }
+	//react native section begin
 
-    @ReactMethod
-    public void substrateAddressWithRef(double seedRef, String suriSuffix, int prefix, Promise promise) {
-        try {
-            String substrateAddress = ethkeySubstrateWalletAddressWithRef(Double.doubleToRawLongBits(seedRef), suriSuffix, prefix);
-            promise.resolve(substrateAddress);
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate address with ref", e);
-        }
-    }
+	@ReactMethod
+	public void qrCode(String data, Promise promise) {
+		try {
+			promise.resolve(ethkeyQrCode(data));
+		} catch (Exception e) {
+			rejectWithException(promise, "qr code", e);
+		}
+	}
 
-    @ReactMethod
-    public void substrateSecretWithRef(double seedRef, String suriSuffix, Promise promise) {
-        try {
-            String derivedSubstrateSecret = ethkeySubstrateMiniSecretKeyWithRef(Double.doubleToRawLongBits(seedRef), suriSuffix);
-            promise.resolve(derivedSubstrateSecret);
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate secret", e);
-        }
-    }
+	@ReactMethod
+	public void tryDecodeQrSequence(int size, int chunkSize, String data, Promise promise) {
+		try {
+			String decoded = qrparserTryDecodeQrSequence(size, chunkSize, data);
+			promise.resolve(decoded);
+		} catch (Exception e) {
+			rejectWithException(promise, "try to decode qr goblet", e);
+        	}
+	}
 
-    @ReactMethod
-    public void substrateSecret(String suri, Promise promise) {
-        try {
-            String derivedSubstrateSecret = ethkeySubstrateMiniSecretKey(suri);
-            promise.resolve(derivedSubstrateSecret);
-        } catch (Exception e) {
-            rejectWithException(promise, "substrate secret with ref", e);
-        }
-    }
+	@ReactMethod
+	public void generateMetadataHandle(String metadata, Promise promise) {
+		promise.resolve(metadataGenerateMetadataHandle(metadata));
+	}
 
-    @ReactMethod
-    public void tryDecodeQrSequence(int size, int chunkSize, String data, Promise promise) {
-        try {
-            String decoded = qrparserTryDecodeQrSequence(size, chunkSize, data);
-            promise.resolve(decoded);
-        } catch (Exception e) {
-            rejectWithException(promise, "try to decode qr goblet", e);
-        }
-    }
+	@ReactMethod
+	public void parseTransaction(String transaction, Promise promise) {
+		try {
+			String decoded = substrateParseTransaction(transaction, dbname);
+			promise.resolve(decoded);
+		} catch (Exception e) {
+			rejectWithException(promise, "transaction parsing", e);
+		}
+	}
 
-    @ReactMethod
-    public void generateMetadataHandle(String metadata, Promise promise) {
-    	promise.resolve(metadataGenerateMetadataHandle(metadata));
-    }
+	@ReactMethod
+	public void signTransaction(String action, String seedName, String password, Promise promise) {
+		try {
+			String encryptedSeedRecord = sharedPreferences.getString(seedName, null);
+			String seedPhrase = decryptSeed(encryptedSeedRecord);
+			String signed = substrateSignTransaction(action, seedPhrase, password, dbname);
+			promise.resolve(signed);
+		} catch (Exception e) {
+			rejectWithException(promise, "transaction signing", e);
+		}
+	}
 
-    private static native String ethkeyBrainwalletAddress(String seed);
-    private static native String ethkeyBrainwalletBIP39Address(String seed);
-    private static native String ethkeyBrainwalletSign(String seed, String message);
-    private static native String ethkeyRlpItem(String data, int position);
-    private static native String ethkeyKeccak(String data);
-    private static native String ethkeyBlake(String data);
-    private static native String ethkeyEthSign(String data);
-    private static native String ethkeyBlockiesIcon(String seed);
-    private static native String ethkeyRandomPhrase(int wordsNumber);
-    private static native String ethkeyEncryptData(String data, String password);
-    private static native String ethkeyDecryptData(String data, String password);
-    private static native String ethkeyQrCode(String data);
-    private static native String ethkeyQrCodeHex(String data);
-    private static native String substrateBrainwalletAddress(String seed, int prefix);
-    private static native String substrateBrainwalletSign(String seed, String message);
-    private static native boolean schnorrkelVerify(String seed, String message, String signature);
-    private static native long ethkeyDecryptDataRef(String data, String password);
-    private static native void ethkeyDestroyDataRef(long data_ref);
-    private static native String ethkeyBrainwalletSignWithRef(long seed_ref, String message);
-    private static native String ethkeySubstrateBrainwalletSignWithRef(long seed_ref, String suriSuffix, String message);
-    private static native String ethkeySubstrateWalletAddressWithRef(long seedRef, String suriSuffix, int prefix);
-    private static native String ethkeyBrainWalletAddressWithRef(long seedRef);
-    private static native String ethkeySubstrateMiniSecretKey(String suri);
-    private static native String ethkeySubstrateMiniSecretKeyWithRef(long seedRef, String suriSuffix);
-    private static native String qrparserTryDecodeQrSequence(int size, int chunkSize, String data);
-    private static native String metadataGenerateMetadataHandle(String metadata);
+	@ReactMethod
+	public void handleTransaction(String action, Promise promise) {
+		try {
+			String signed = substrateSignTransaction(action, "", "", dbname);
+			promise.resolve(signed);
+		} catch (Exception e) {
+			rejectWithException(promise, "transaction handling", e);
+		}
+	}
+
+	@ReactMethod
+	public void developmentTest(String input, Promise promise) {
+		try {
+			String path = reactContext.getFilesDir().toString();
+			String output = substrateDevelopmentTest(path);
+			promise.resolve(output);
+		} catch (Exception e) {
+			rejectWithException(promise, "Rust interface testing error", e);
+		}
+	}
+
+	//This should be only run once ever!
+	//Also this factory resets the Signer upon deletion of local data
+	//Should be cryptographically reliable
+	//However this was not audited yet
+	@ReactMethod
+	public void dbInit(Promise promise) {
+		try {
+			//Move database from assets to internal storage
+			//This function is not usable for anything else
+			copyAsset("");
+			generateSecretKey(new KeyGenParameterSpec.Builder(
+				KEY_NAME,
+				KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+			).setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+				.setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
+				.setUserAuthenticationParameters(1, KeyProperties.AUTH_DEVICE_CREDENTIAL)
+				.setUserAuthenticationRequired(true)
+				.build());
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Database initialization error", e);
+		}
+	}
+
+	@ReactMethod
+	public void getAllNetworksForNetworkSelector(Promise promise) {
+		try {
+			String allNetworks = dbGetAllNetworksForNetworkSelector(dbname);
+			promise.resolve(allNetworks);
+		} catch (Exception e) {
+			rejectWithException(promise, "Database all networks fetch error", e);
+		}
+	}
+	
+	@ReactMethod
+	public void getNetwork(String genesisHash, Promise promise) {
+		try {
+			String network = dbGetNetwork(genesisHash, dbname);
+			promise.resolve(network);
+		} catch (Exception e) {
+			rejectWithException(promise, "Database network fetch error", e);
+		}
+	}
+
+	@ReactMethod
+	public void getAllSeedNames(Promise promise) {
+		try {
+			String seedNameSet = "[\"" + String.join("\", \"", sharedPreferences.getAll().keySet()) + "\"]";
+			promise.resolve(seedNameSet);
+		} catch (Exception e) {
+			rejectWithException(promise, "Database all seed names fetch error", e);
+		}
+	}
+
+	@ReactMethod
+	public void getRelevantIdentities(String seedName, String genesisHash, Promise promise) {
+		try {
+			String allSeedNames = dbGetRelevantIdentities(seedName, genesisHash, dbname);
+			promise.resolve(allSeedNames);
+		} catch (Exception e) {
+			rejectWithException(promise, "Database fetch relevant identities error", e);
+		}
+	}
+
+	@ReactMethod
+	public void tryCreateSeed(String seedName, String crypto, int seedLength, Promise promise) {
+		try {
+			if (sharedPreferences.contains(seedName)) throw new AssertionException("Seed with this name already exists");
+
+			startAuthentication();
+			
+			Cipher cipher = getCipher();
+			SecretKey secretKey = getSecretKey();
+			
+			String seedPhrase = substrateTryCreateSeed(seedName, crypto, "", seedLength, dbname);
+			
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+			String iv = Base64.encodeToString(cipher.getIV(), Base64.DEFAULT);
+			byte[] encryptedSeedBytes = cipher.doFinal(seedPhrase.getBytes());
+			String encryptedSeedRecord = Base64.encodeToString(encryptedSeedBytes, Base64.DEFAULT) + separator + iv;
+
+			sharedPreferences.edit().putString(seedName, encryptedSeedRecord).apply();
+			
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "New seed creation failed", e);
+		}
+	}
+
+	@ReactMethod
+	public void tryRecoverSeed(String seedName, String crypto, String seedPhrase, Promise promise) {
+		try {
+			if (sharedPreferences.contains(seedName)) throw new AssertionException("Seed with this name already exists");
+
+			startAuthentication();
+			
+			Cipher cipher = getCipher();
+			SecretKey secretKey = getSecretKey();
+			
+			String seedPhraseCheck = substrateTryCreateSeed(seedName, crypto, seedPhrase, 0, dbname);
+			
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+			String iv = Base64.encodeToString(cipher.getIV(), Base64.DEFAULT);
+			byte[] encryptedSeedBytes = cipher.doFinal(seedPhraseCheck.getBytes());
+			String encryptedSeedRecord = Base64.encodeToString(encryptedSeedBytes, Base64.DEFAULT) + separator + iv;
+
+			sharedPreferences.edit().putString(seedName, encryptedSeedRecord).apply();
+			
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Seed recovery failed", e);
+		}
+	}
+
+	@ReactMethod
+	public void fetchSeed(String seedName, String pin, Promise promise) {
+		try {
+			String encryptedSeedRecord = sharedPreferences.getString(seedName, null);
+			String seedPhrase = decryptSeed(encryptedSeedRecord);
+			promise.resolve(seedPhrase);
+		} catch (Exception e) {
+			rejectWithException(promise, "Seed fetch failed", e);
+		}
+	}
+
+	@ReactMethod
+	public void tryCreateIdentity(String idName, String seedName, String crypto, String path, String network, Promise promise) {
+		try {
+			boolean hasPassword = substrateCheckPath(path);
+			String encryptedSeedRecord = sharedPreferences.getString(seedName, null);
+			String seedPhrase = decryptSeed(encryptedSeedRecord);
+			substrateTryCreateIdentity(idName, seedName, seedPhrase, crypto, path, network, hasPassword, dbname);	
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Identity creation failed", e);
+		}
+	}
+
+	@ReactMethod
+	public void suggestNPlusOne(String path, String seedName, String networkId, Promise promise) {
+		try {
+			String suggestion = substrateSuggestNPlusOne(path, seedName, networkId, dbname);
+			promise.resolve(suggestion);
+		} catch (Exception e) {
+			rejectWithException(promise, "Can not suggest a path", e);
+		}
+	}
+
+	@ReactMethod
+	public void suggestPathName(String path, Promise promise) {
+		String suggestion = substrateSuggestName(path);
+		promise.resolve(suggestion);
+	}
+
+	@ReactMethod
+	public void deleteIdentity(String pubKey, String networkId, Promise promise) {
+		try {
+			substrateDeleteIdentity(pubKey, networkId, dbname);
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Can not delete identity", e);
+		}
+	}
+
+	@ReactMethod
+	public void getNetworkSpecs(String networkId, Promise promise) {
+		try {
+			String networkSpecs = substrateGetNetworkSpecs(networkId, dbname);
+			promise.resolve(networkSpecs);
+		} catch (Exception e) {
+			rejectWithException(promise, "Network settings fetch failure", e);
+		}
+	}
+
+	@ReactMethod
+	public void removeNetwork(String network, Promise promise) {
+		try {
+			substrateRemoveNetwork(network, dbname);
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Network removal error", e);
+		}
+	}
+
+	@ReactMethod
+	public void removeMetadata(String specName, int specVersion, Promise promise) {
+		try {
+			substrateRemoveMetadata(specName, specVersion, dbname);
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Metadata removal error", e);
+		}
+	}
+
+	@ReactMethod
+	public void removeSeed(String seedName, Promise promise) {
+		try {
+			substrateRemoveSeed(seedName, dbname);
+			sharedPreferences.edit()
+				.remove(seedName)
+				.apply();
+			promise.resolve(0);
+		} catch (Exception e) {
+			rejectWithException(promise, "Seed removal error", e);
+		}
+	}
+
+
+	//react native section end
+
+	//rust native section begin
+
+	private static native String ethkeyQrCode(String data);
+	private static native String qrparserTryDecodeQrSequence(int size, int chunkSize, String data);
+	private static native String metadataGenerateMetadataHandle(String metadata);
+	private static native String substrateParseTransaction(String transaction, String dbname);
+	private static native String substrateSignTransaction(String action, String seedPhrase, String password, String dbname);
+	private static native String substrateDevelopmentTest(String input);
+	private static native String dbGetAllNetworksForNetworkSelector(String dbname);
+	private static native String dbGetNetwork(String genesisHash, String dbname);
+	private static native String dbGetRelevantIdentities(String seedName, String genesisHash, String dbname);
+	private static native String substrateTryCreateSeed(String seedName, String crypto, String seedPhrase, int seedLength, String dbname);
+	private static native String substrateSuggestNPlusOne(String path, String seedName, String networkIdString, String dbname);
+	private static native boolean substrateCheckPath(String path);
+	private static native void substrateTryCreateIdentity(String idName, String seedName, String seedPhrase, String crypto, String path, String network, boolean hasPassword, String dbname);
+	private static native String substrateSuggestName(String path);
+	private static native void substrateDeleteIdentity(String pubKey, String network, String dbname);
+	private static native String substrateGetNetworkSpecs(String network, String dbname);
+	private static native void substrateRemoveNetwork(String network, String dbname);
+	private static native void substrateRemoveMetadata(String networkName, int networkVersion, String dbname);
+	private static native void substrateRemoveSeed(String seedName, String dbname);
+
+	//rust native section end
 }

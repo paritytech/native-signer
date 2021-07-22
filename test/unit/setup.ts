@@ -31,17 +31,3 @@ jest.mock('react-native-randombytes', () => {
 	};
 	return apiMock;
 });
-
-// mock WASM code - used in tests only
-/*
-jest.mock('@polkadot/wasm-crypto', () => {
-	const original = jest.requireActual('@polkadot/wasm-crypto');
-	const apiMock = {
-		...original,
-		waitReady: jest.fn().mockReturnValue(new Promise((resolve, reject) => {resolve(true)})),
-		isReady: jest.fn().mockReturnValue(true)
-	};
-	return apiMock;
-});
-*/
-// jest.doMock('react-native-substrate-sign', () => 'substrateSignMock');

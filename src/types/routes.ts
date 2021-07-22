@@ -11,7 +11,7 @@ export type RootStackParamList = {
 	AccountUnlock: { next: string; onDelete: () => any };
 	IdentityBackup: { isNew: true } | { isNew: false; seedPhrase: string };
 	IdentityManagement: undefined;
-	IdentityNew: { isRecover: boolean } | undefined;
+	RootSeedNew: { isRecover: boolean } | undefined;
 	MessageDetails: undefined;
 	Empty: undefined;
 	LegacyAccountBackup:
@@ -59,8 +59,8 @@ export type RootStackParamList = {
 	Security: undefined;
 	DetailsMessage: undefined;
 	SignedMessage: undefined;
-	DetailsTx: { resolve: () => void };
-	SignedTx: undefined;
+	DetailsTx: { payload: string };
+	SignedTx: { payload: string };
 	TermsAndConditions: undefined;
 	TxDetails: undefined;
 };

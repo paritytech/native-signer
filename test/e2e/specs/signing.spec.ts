@@ -15,11 +15,6 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 import {
-	EthereumNetworkKeys,
-	SUBSTRATE_NETWORK_LIST,
-	SubstrateNetworkKeys
-} from 'constants/networkSpecs';
-import {
 	launchWithScanRequest,
 	pinCode,
 	tapBack,
@@ -51,12 +46,6 @@ const testSignedTx = async (): Promise<void> => {
 };
 
 const testSignedMessage = async (): Promise<void> => {
-	await testTap(SecurityHeader.scanButton);
-	await testUnlockPin(pinCode);
-	await testVisible(SignedMessage.qrView);
-};
-
-const testEthereumMessage = async (): Promise<void> => {
 	await testTap(SecurityHeader.scanButton);
 	await testUnlockPin(pinCode);
 	await testVisible(SignedMessage.qrView);
@@ -111,8 +100,7 @@ describe('Signing ane exporting test', () => {
 			await tapBack();
 			await tapBack();
 			const PolkadotNetworkButtonIndex =
-				Main.networkButton +
-				SUBSTRATE_NETWORK_LIST[SubstrateNetworkKeys.POLKADOT].pathId;
+				Main.networkButton;
 			await testTap(testIDs.Main.addNewNetworkButton);
 			await testScrollAndTap(
 				PolkadotNetworkButtonIndex,
@@ -134,33 +122,6 @@ describe('Signing ane exporting test', () => {
 		it('should sign multipart request', async () => {
 			await launchWithScanRequest(ScanTestRequest.SetRemarkMultiPartPolkadot);
 			await testSignedMessage();
-		});
-	});
-
-	describe('Ethereum Signing Test', () => {
-		it('generate Kovan account', async () => {
-			await tapBack();
-			await tapBack();
-			const kovanNetworkButtonIndex =
-				Main.networkButton + EthereumNetworkKeys.KOVAN;
-			await testTap(testIDs.Main.addNewNetworkButton);
-			await testScrollAndTap(
-				kovanNetworkButtonIndex,
-				testIDs.Main.chooserScreen
-			);
-			await testVisible(PathDetail.screen);
-			await tapBack();
-			await testExist(Main.chooserScreen);
-		});
-
-		it('should sign transactions', async () => {
-			await launchWithScanRequest(ScanTestRequest.EthereumTransaction);
-			await testSignedTx();
-		});
-
-		it('should sign message', async () => {
-			await launchWithScanRequest(ScanTestRequest.EthereumMessage);
-			await testEthereumMessage();
 		});
 	});
 });

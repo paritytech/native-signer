@@ -16,48 +16,129 @@
 
 import { NativeModules } from 'react-native';
 
-import { checksummedAddress } from './checksum';
-
-import { TryBrainWalletAddress } from 'utils/seedRefHooks';
 import { MetadataHandle } from 'types/metadata';
+import { PayloadCardsSet } from 'types/payloads';
 
 const { SubstrateSign } = NativeModules || {};
 
-interface AddressObject {
-	address: string;
-	bip39: boolean;
-}
-
-export function keccak(data: string): Promise<string> {
-	return SubstrateSign.keccak(data);
-}
-
-/**
- * Turn an address string tagged with either 'legacy:' or 'bip39:' prefix
- * to an object, marking if it was generated with BIP39.
- */
-function untagAddress(address: string): AddressObject {
-	let bip39 = false;
-
-	const colonIdx = address.indexOf(':');
-
-	if (colonIdx !== -1) {
-		bip39 = address.substring(0, colonIdx) === 'bip39';
-		address = address.substring(colonIdx + 1);
+export async function rustTest(input: string): Promise<string> {
+	console.log('###########################');
+	console.log('RUST INTERFACE TEST INVOKED');
+	console.log('###########################');
+	console.log(input);
+	console.log(typeof input);
+	let output = '';
+	try {
+		output = await SubstrateSign.developmentTest(input);
+	} catch (e) {
+		output = e;
 	}
-
-	return {
-		address,
-		bip39
-	};
+	console.log('###########################');
+	console.log(output);
+	console.log('###########################');
+	console.log('RUST INTERFACE TEST SUCCESS');
+	console.log('###########################');
+	return output;
 }
 
-function toHex(x: string): string {
-	return x
-		.split('')
-		.map(c => c.charCodeAt(0).toString(16))
-		.map(n => (n.length < 2 ? `0${n}` : n))
-		.join('');
+// Creates a QR code for the UTF-8 representation of a string
+export function qrCode(data: string): Promise<string> {
+	return SubstrateSign.qrCode(data);
+}
+
+//This is called when terms and conditions are acknowledged; the Signer is not usable before db init.
+export async function dbInit(): Promise<void> {
+	try {
+		await SubstrateSign.dbInit();
+		console.log('db created!');
+	} catch (e) {
+		console.log(e);
+	}
+}
+
+export async function tryCreateSeed(
+	seedName: string,
+	cryptoType: string
+): Promise<void> {
+	console.log(seedName);
+	console.log(cryptoType);
+	const spitOut = await SubstrateSign.tryCreateSeed(seedName, cryptoType, 24);
+	console.log('seed creation');
+	console.log(spitOut);
+}
+
+export async function tryRecoverSeed(
+	seedName: string,
+	cryptoType: string,
+	seedPhrase: string
+): Promise<void> {
+	await SubstrateSign.tryRecoverSeed(seedName, cryptoType, seedPhrase);
+}
+
+export async function getSeedPhraseForBackup(
+	seedName: string,
+	pin: string
+): Promise<string> {
+	const seedPhrase = await SubstrateSign.fetchSeed(seedName, pin);
+	console.log('it is now smeared all over memory');
+	console.log(seedPhrase);
+	return seedPhrase;
+}
+
+export async function suggestNPlusOne(
+	path: string,
+	seedName: string,
+	network: string
+): Promise<string> {
+	try {
+		const suggest = await SubstrateSign.suggestNPlusOne(
+			path,
+			seedName,
+			network
+		);
+		return suggest;
+	} catch (e) {
+		console.warn(e);
+		return '';
+	}
+}
+
+export async function suggestSeedName(path: string): Promise<string> {
+	const suggest = await SubstrateSign.suggestPathName(path);
+	console.log(suggest);
+	return suggest;
+}
+
+export async function tryCreateIdentity(
+	idName: string,
+	seedName: string,
+	cryptoType: string,
+	path: string,
+	networkId: string
+): Promise<void> {
+	console.log('creating identity...');
+	if (idName == "") throw new Error("Seed name should not be blank");
+	await SubstrateSign.tryCreateIdentity(
+		idName,
+		seedName,
+		cryptoType,
+		path,
+		networkId
+	);
+	console.log('identity created');
+}
+
+export async function deleteIdentity(
+	pubKey: string,
+	networkId: string
+): Promise<void> {
+	try {
+		console.log('deleting identity');
+		await SubstrateSign.deleteIdentity(pubKey, networkId);
+		console.log('deleting successful');
+	} catch (e) {
+		console.warn(e);
+	}
 }
 
 //Try to decode fountain packages
@@ -91,214 +172,122 @@ export async function generateMetadataHandle(
 	return metadataHandle;
 }
 
-export async function brainWalletAddress(seed: string): Promise<AddressObject> {
-	const taggedAddress = await SubstrateSign.brainWalletAddress(seed);
-	const { bip39, address } = untagAddress(taggedAddress);
-	const hash = await keccak(toHex(address));
-
-	return {
-		address: checksummedAddress(address, hash),
-		bip39
-	};
+//Generate payload info
+//TODO: replace altogether with arbitrary payload parsing finction
+export async function makeTransactionCardsContents(
+	payload: string
+): Promise<PayloadCardsSet> {
+	const parsedJSON = await SubstrateSign.parseTransaction(payload);
+	console.log(parsedJSON);
+	const parsed = JSON.parse(parsedJSON);
+	return parsed;
 }
 
-export async function brainWalletAddressWithRef(
-	createBrainWalletFn: TryBrainWalletAddress
-): Promise<AddressObject> {
-	const taggedAddress = await createBrainWalletFn();
-	const { bip39, address } = untagAddress(taggedAddress);
-	const hash = await keccak(toHex(address));
-
-	return {
-		address: checksummedAddress(address, hash),
-		bip39
-	};
+//Perform action requiring use of secret
+//Typically sign a transaction
+export async function sign(
+	action: string,
+	seedName: string,
+	password: string
+): Promise<string> {
+	const signedPayload = await SubstrateSign.signTransaction(
+		action,
+		seedName,
+		password
+	);
+	return signedPayload;
 }
 
-export async function brainWalletBIP39Address(
-	seed: string
-): Promise<AddressObject | null> {
+//Perform action not requiring use of secret
+//Typically updates
+export async function accept(action: string): Promise<string> {
 	try {
-		const taggedAddress = await SubstrateSign.brainWalletBIP39Address(seed);
-		const { bip39, address } = untagAddress(taggedAddress);
-
-		const hash = await keccak(toHex(address));
-
-		return {
-			address: checksummedAddress(address, hash),
-			bip39
-		};
-	} catch (_) {
-		return null;
+		const acceptResult = await SubstrateSign.handleTransaction(action);
+		console.log(acceptResult);
+		return acceptResult;
+	} catch (e) {
+		console.log(e);
+		return e.toString();
 	}
 }
 
-export function brainWalletSign(
-	seed: string,
-	message: string
-): Promise<string> {
-	return SubstrateSign.brainWalletSign(seed, message);
-}
+/**
+ * Functions to fill UI
+ */
 
-export function rlpItem(rlp: string, position: number): Promise<string> {
-	return SubstrateSign.rlpItem(rlp, position);
-}
-
-export function ethSign(data: string): Promise<string> {
-	return SubstrateSign.ethSign(data);
-}
-
-export function blockiesIcon(seed: string): Promise<string> {
-	return SubstrateSign.blockiesIcon(seed.toLowerCase());
-}
-
-export function words(wordsNumber: number): Promise<string> {
-	return SubstrateSign.randomPhrase(wordsNumber);
-}
-
-export function encryptData(data: string, password: string): Promise<string> {
-	return SubstrateSign.encryptData(data, password);
-}
-
-export function decryptData(data: string, password: string): Promise<string> {
-	return SubstrateSign.decryptData(data, password);
-}
-
-// Creates a QR code for the UTF-8 representation of a string
-export function qrCode(data: string): Promise<string> {
-	return SubstrateSign.qrCode(data);
-}
-
-// Creates a QR code for binary data from a hex-encoded string
-export function qrCodeHex(data: string): Promise<string> {
-	return SubstrateSign.qrCodeHex(data);
-}
-
-export function blake2b(data: string): Promise<string> {
-	return SubstrateSign.blake2b(data);
-}
-
-export function substrateSecret(suri: string): Promise<string> {
-	return SubstrateSign.substrateSecret(suri);
-}
-
-// Get an SS58 encoded address for a sr25519 account from a BIP39 phrase and a prefix.
-// Prefix is a number used in the SS58 encoding:
-//
-//   Polkadot proper = 0
-//   Kusama = 2
-//   Default (testnets) = 42
-export function substrateAddress(
-	seed: string,
-	prefix: number
-): Promise<string> {
-	return SubstrateSign.substrateAddress(seed, prefix);
-}
-
-// Sign data using sr25519 crypto for a BIP39 phrase. Message is hex-encoded byte array.
-export function substrateSign(seed: string, message: string): Promise<string> {
-	return SubstrateSign.substrateSign(seed, message);
-}
-
-// Verify a sr25519 signature is valid
-export function schnorrkelVerify(
-	seed: string,
-	message: string,
-	signature: string
-): Promise<boolean> {
-	return SubstrateSign.schnorrkelVerify(seed, message, signature);
-}
-
-export class SeedRefClass {
-	private dataRef: number;
-	private valid: boolean;
-
-	constructor() {
-		this.dataRef = 0;
-		this.valid = false;
+//Get info to fill screen with list of networks
+export async function getAllNetworks(): Promise<[Network] | []> {
+	try {
+		const allNetworksJSON = await SubstrateSign.getAllNetworksForNetworkSelector();
+		const allNetworks = JSON.parse(allNetworksJSON);
+		return allNetworks;
+	} catch (e) {
+		console.log(e);
+		return [];
 	}
+}
 
-	isValid(): boolean {
-		return this.valid;
+//Get relevant showable info on one network
+export async function getNetwork(networkKey: string): Promise<Network> {
+	try {
+		const networkJSON = await SubstrateSign.getNetwork(networkKey);
+		const network = JSON.parse(networkJSON);
+		return network;
+	} catch (e) {
+		console.log(e);
+		return {};
 	}
+}
 
-	// Decrypt a seed and store the reference. Must be called before signing.
-	async tryCreate(encryptedSeed: string, password: string): Promise<number> {
-		if (this.valid) {
-			// Seed reference was already created.
-			return this.dataRef;
-		}
-		const dataRef: number = await SubstrateSign.decryptDataRef(
-			encryptedSeed,
-			password
+//Get list of identities under current seed
+export async function getIdentitiesForSeed(
+	seedName: string,
+	genesisHash: string
+): Promise<Identitieslist> {
+	try {
+		const relevantIdentitiesJSON = await SubstrateSign.getRelevantIdentities(
+			seedName,
+			genesisHash
 		);
-		this.dataRef = dataRef;
-		this.valid = true;
-		return this.dataRef;
+		const relevantIdentities = JSON.parse(relevantIdentitiesJSON);
+		console.log(relevantIdentities);
+		return relevantIdentities;
+	} catch (e) {
+		console.log(e);
+		return [];
 	}
+}
 
-	trySubstrateAddress(suriSuffix: string, prefix: number): Promise<string> {
-		if (!this.valid) {
-			throw new Error('a seed reference has not been created');
-		}
-		return SubstrateSign.substrateAddressWithRef(
-			this.dataRef,
-			suriSuffix,
-			prefix
-		);
+//Get list of seedphrase identifiers
+export async function getAllSeedNames(): Promise<[string] | []> {
+	try {
+		const allSeedsJSON = await SubstrateSign.getAllSeedNames();
+		const allSeeds = JSON.parse(allSeedsJSON);
+		return allSeeds;
+	} catch (e) {
+		console.log(e);
+		return [];
 	}
+}
 
-	tryBrainWalletAddress(): Promise<string> {
-		if (!this.valid) {
-			throw new Error('a seed reference has not been created');
-		}
-		return SubstrateSign.brainWalletAddressWithRef(this.dataRef).then(
-			(address: string) => {
-				return address;
-			}
-		);
-	}
+//Network management screen
+export async function getNetworkSpecs(networkKey: string): Promise<object> {
+	const specsJSON = await SubstrateSign.getNetworkSpecs(networkKey);
+	const specs = JSON.parse(specsJSON);
+	return specs;
+}
 
-	// Destroy the decrypted seed. Must be called before this leaves scope or
-	// memory will leak.
-	tryDestroy(): Promise<void> {
-		if (!this.valid) {
-			// Seed reference was never created or was already destroyed.
-			throw new Error('cannot destroy an invalid seed reference');
-		}
-		return SubstrateSign.destroyDataRef(this.dataRef).then(() => {
-			this.valid = false;
-		});
-	}
+//Network deletion
+export async function removeNetwork(networkKey: string): Promise<void> {
+	await SubstrateSign.removeNetwork(networkKey);
+}
 
-	// Use the seed reference to sign a message. Will throw an error if
-	// `tryDestroy` has already been called or if `tryCreate` failed.
-	tryBrainWalletSign(message: string): Promise<string> {
-		if (!this.valid) {
-			// Seed reference was never created or was already destroyed.
-			throw new Error('cannot sign with an invalid seed reference');
-		}
-		return SubstrateSign.brainWalletSignWithRef(this.dataRef, message);
-	}
+//Metadata deletion
+export async function removeMetadata(specName: string, specVersion: number): Promise<void> {
+	await SubstrateSign.removeMetadata(specName, specVersion);
+}
 
-	// Use a reference returned by decryptDataRef to sign a message
-	trySubstrateSign(suriSuffix: string, message: string): Promise<string> {
-		if (!this.valid) {
-			// Seed reference was never created or was already destroyed.
-			throw new Error('cannot sign with an invalid seed reference');
-		}
-		return SubstrateSign.substrateSignWithRef(
-			this.dataRef,
-			suriSuffix,
-			message
-		);
-	}
-
-	trySubstrateSecret(suriSuffix: string): Promise<string> {
-		if (!this.valid) {
-			// Seed reference was never created or was already destroyed.
-			throw new Error('cannot sign with an invalid seed reference');
-		}
-		return SubstrateSign.substrateSecretWithRef(this.dataRef, suriSuffix);
-	}
+//Remove seed and ALL associated addresses
+export async function removeSeed(seedName: string): Promise<void> {
+	await SubstrateSign.removeSeed(seedName);
 }

@@ -24,7 +24,7 @@ import colors from 'styles/colors';
 import fonts from 'styles/fonts';
 import ScreenHeading from 'components/ScreenHeading';
 import { tryDecodeQr } from 'utils/native';
-import { TxRequestData } from 'types/scannerTypes';
+import { resetNavigationWithNetworkChooser } from 'utils/navigationHelpers';
 //for tests
 import testIDs from 'e2e/testIDs';
 import { useInjectionQR } from 'e2e/injections';
@@ -40,7 +40,7 @@ export default function Scanner({
 	const [decodeProcess, setDecodeProcess] = useState(true);
 
 	// E2E tests
-	const [mockIndex, onMockBarCodeRead] = useInjectionQR();
+	//const [mockIndex, onMockBarCodeRead] = useInjectionQR();
 
 	// all code to derive information when size of package is determined
 	function setExpectedMessageInfo(size: string): void {
@@ -54,6 +54,12 @@ export default function Scanner({
 		setNominalPacketsNumber(~~(parsedMessageSize / (parsedPacketSize - 4)) + 2);
 	}
 
+	function processPackage(payload: string): void {
+		resetNavigationWithNetworkChooser(navigation, 'DetailsTx', {
+			payload: payload
+		});
+	}
+
 	function processQrFrame(data: string): void {
 		if (nominalPacketsNumber === 0) {
 			console.log(data);
@@ -64,8 +70,9 @@ export default function Scanner({
 				console.log('legacy package');
 				const parsedLegacySize = parseInt(data.substr(1, 4), 16) - 5;
 				console.log(parsedLegacySize);
-				//processPackage(data.substr(15,parsedLegacySize*2));
-				navigation.goBack();
+				console.log(data.substr(15, parsedLegacySize * 2));
+				processPackage(data.substr(15, parsedLegacySize * 2));
+				//navigation.goBack();
 			}
 		}
 		const payload = data.substr(13, packetSize * 2);
@@ -93,18 +100,14 @@ export default function Scanner({
 				console.log('success');
 				console.log(decoded.substr(0, 128));
 				setDecodeProcess(false);
-				//TODO: here we should place general handler if/when we switch
-				//to ubiquitous fountains. Now this handles only metadata input
-				//processPakage(decoded);
-				const toSave = '0x' + decoded.substr(6);
-				navigation.navigate('MetadataSaving', { metadata: toSave });
+				processPackage(decoded);
 			}
 		}
 	};
 
-	useEffect(() => {
-		/** E2E Test Injection Code **/
-		if (global.inTest && global.scanRequest !== undefined) {
+	//	useEffect(() => {
+	/** E2E Test Injection Code **/
+	/*		if (global.inTest && global.scanRequest !== undefined) {
 			onMockBarCodeRead(
 				global.scanRequest,
 				async (tx: TxRequestData): Promise<void> => {
@@ -113,7 +116,7 @@ export default function Scanner({
 			);
 		}
 		/* eslint-disable-next-line react-hooks/exhaustive-deps */
-	}, [mockIndex]);
+	//	}, [mockIndex]);
 
 	return (
 		<SafeAreaViewContainer>
